@@ -24,6 +24,9 @@ from face_tracking import (
     stop_tracking,
     get_faculty_frame_base64,
     is_face_tracking_available,
+    get_smoothness,
+    set_smoothness,
+    get_tracking_params,
 )
 from pi_stream import (
     ensure_pi_receiver_started,
@@ -134,6 +137,25 @@ async def mode_idle():
         current_mode = "idle"
     return {"mode": "idle", "status": "stopped"}
 
+
+# ─── TRACKING SMOOTHNESS ─────────────────────────────────────────────────────
+
+@app.get("/api/tracking/params")
+async def tracking_params():
+    """Return current smoothing parameters."""
+    return get_tracking_params()
+
+@app.patch("/api/tracking/smoothness")
+async def update_smoothness(data: dict):
+    """
+    Set EMA smoothness alpha (0.01 = max smooth/slow, 0.50 = responsive).
+    Body: {"alpha": 0.10}
+    """
+    alpha = data.get("alpha")
+    if alpha is None:
+        return {"error": "Missing alpha"}, 400
+    set_smoothness(float(alpha))
+    return get_tracking_params()
 
 # ─── SERVO CONTROLS ───────────────────────────────────────────────────────────
 

@@ -112,6 +112,69 @@ button.danger {
   gap: 10px;
 }
 
+/* ── Smoothness Slider ──────────────────────────────────────────────────────── */
+
+.smoothnessRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e5eaf0;
+}
+
+.smoothnessLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #344054;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.smoothnessSlider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 3px;
+  background: linear-gradient(to right, #0f766e, #c8d0da);
+  outline: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.smoothnessSlider:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.smoothnessSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #0f766e;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.smoothnessSlider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+.smoothnessSlider::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #0f766e;
+  border: 2px solid #ffffff;
+  cursor: pointer;
+}
+
+.smoothnessValue {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+  white-space: nowrap;
+  min-width: 88px;
+  text-align: right;
+}
+
 .statusPanel dl {
   display: grid;
   grid-template-columns: 100px 1fr;

@@ -4,6 +4,15 @@ import axios from 'axios'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const WS_BASE  = API_BASE.replace(/^http/, 'ws')
 
+// ─── Debounce ─────────────────────────────────────────────────────────────────
+function useDebounce(fn, delay) {
+  const timer = useRef(null)
+  return useCallback((...args) => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => fn(...args), delay)
+  }, [fn, delay])
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function useImageSocket(path) {
@@ -108,6 +117,10 @@ export default function App() {
   const [audioActive, setAudioActive] = useState(false)
   const [audioBusy,   setAudioBusy]   = useState(false)
 
+  // Smoothness
+  const [smoothness,      setSmoothness]      = useState(0.10)
+  const [smoothnessBusy,  setSmoothnessbusy]  = useState(false)
+
   // Voice chat
   const [voiceState,      setVoiceState]      = useState('idle')
   const [voiceTranscript, setVoiceTranscript] = useState('')
@@ -146,6 +159,32 @@ export default function App() {
     } catch {
       setError('Backend is not reachable')
     }
+  }
+
+  async function loadTrackingParams() {
+    try {
+      const { data } = await axios.get(`${API_BASE}/api/tracking/params`)
+      setSmoothness(data.alpha)
+    } catch {}
+  }
+
+  const sendSmoothness = useCallback(async (alpha) => {
+    setSmoothnessbusy(true)
+    try {
+      await axios.patch(`${API_BASE}/api/tracking/smoothness`, { alpha })
+    } catch {
+      setError('Failed to update smoothness')
+    } finally {
+      setSmoothnessbusy(false)
+    }
+  }, [])
+
+  const debouncedSendSmoothness = useDebounce(sendSmoothness, 300)
+
+  function handleSmoothnessChange(e) {
+    const val = parseFloat(e.target.value)
+    setSmoothness(val)
+    debouncedSendSmoothness(val)
   }
 
   async function post(path) {
@@ -293,6 +332,7 @@ export default function App() {
 
   useEffect(() => {
     refreshStatus()
+    loadTrackingParams()
     const id = window.setInterval(refreshStatus, 2000)
     return () => window.clearInterval(id)
   }, [])
@@ -321,6 +361,27 @@ export default function App() {
             <button id="btn-mode-tracking" disabled={busy} onClick={() => post('/api/mode/tracking')}>Tracking</button>
             <button id="btn-mode-vinu"     disabled={busy} onClick={() => post('/api/mode/vinu')}>VINU</button>
             <button id="btn-mode-idle"     disabled={busy} onClick={() => post('/api/mode/idle')}>Idle</button>
+          </div>
+          <div className="smoothnessRow">
+            <label className="smoothnessLabel" htmlFor="smoothness-slider">
+              Smoothness
+            </label>
+            <input
+              id="smoothness-slider"
+              type="range"
+              min="0.01"
+              max="0.50"
+              step="0.01"
+              value={smoothness}
+              onChange={handleSmoothnessChange}
+              disabled={smoothnessBusy}
+              className="smoothnessSlider"
+            />
+            <span className="smoothnessValue">
+              {smoothness <= 0.08 ? '🐢 Max Smooth' :
+               smoothness >= 0.40 ? '⚡ Responsive' :
+               `${Math.round((1 - smoothness / 0.5) * 100)}%`}
+            </span>
           </div>
         </div>
 
