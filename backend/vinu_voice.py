@@ -199,15 +199,6 @@ def _transcribe(audio_bytes: bytes) -> str:
 
 
 def _speak(text: str):
-    """Speak text through the server speaker using gTTS + mpg123."""
-    from gtts import gTTS
-    player = shutil.which("mpg123")
-    if not player:
-        print("[voice] TTS skipped: mpg123 not installed")
-        return
-    output_path = os.path.join(tempfile.gettempdir(), "vinu_voice_reply.mp3")
-    try:
-        gTTS(text=text, lang="en", tld="co.in").save(output_path)
-        subprocess.Popen([player, "-q", output_path]).wait()
-    except Exception as exc:
-        print(f"[voice] TTS error: {exc}")
+    """Speak text through the server speaker using the tracked speak_response in vinu_engine."""
+    from vinu_engine import speak_response
+    speak_response(text)

@@ -30,6 +30,9 @@ vinu_camera = None
 vinu_status = "idle"
 camera_lock = threading.Lock()
 
+active_speech_process = None
+speech_lock = threading.Lock()
+
 def get_vinu_status():
     return vinu_status
 
@@ -44,13 +47,25 @@ def start_vinu():
     print("VINU mode started")
 
 def stop_vinu():
-    global vinu_active, vinu_camera
+    global vinu_active, vinu_camera, active_speech_process
     vinu_active = False
     with camera_lock:
         if vinu_camera:
             vinu_camera.release()
             vinu_camera = None
-    print("VINU mode stopped")
+    
+    # Kill any active voice speech immediately
+    with speech_lock:
+        if active_speech_process:
+            try:
+                active_speech_process.terminate()
+                active_speech_process.wait(timeout=1)
+            except Exception as e:
+                print(f"Error terminating speech process: {e}")
+            finally:
+                active_speech_process = None
+                
+    print("VINU mode stopped (including any active speech)")
 
 def capture_frame_base64():
     with camera_lock:
@@ -150,6 +165,7 @@ def _query_vinu_sync(text_query: str, use_camera: bool = False):
         return f"Error: {str(e)}"
 
 def speak_response(text):
+    global active_speech_process
     if not ENABLE_TTS:
         return
     player = shutil.which("mpg123")
@@ -161,9 +177,21 @@ def speak_response(text):
     try:
         tts = gTTS(text=text, lang='en', tld='co.in')
         tts.save(output_path)
-        subprocess.Popen(
-            [player, "-q", output_path]
-        ).wait()
+        
+        # Terminate any existing speech process first
+        with speech_lock:
+            if active_speech_process:
+                try:
+                    active_speech_process.terminate()
+                except:
+                    pass
+            active_speech_process = subprocess.Popen([player, "-q", output_path])
+            
+        # Wait for this specific process to finish
+        active_speech_process.wait()
+        
+        with speech_lock:
+            active_speech_process = None
     except Exception as e:
         print(f"TTS error: {e}")
 
