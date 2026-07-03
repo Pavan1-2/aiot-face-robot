@@ -9,10 +9,7 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-button,
-textarea {
-  font: inherit;
-}
+button, textarea { font: inherit; }
 
 button {
   min-height: 40px;
@@ -22,7 +19,7 @@ button {
   color: #17212b;
   cursor: pointer;
   padding: 0 14px;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
 button:hover:not(:disabled) {
@@ -41,7 +38,7 @@ button.danger {
   color: #ffffff;
 }
 
-/* ── Layout ─────────────────────────────────────────────────────────────── */
+/* ── Layout ────────────────────────────────────────────────────────────────── */
 
 .shell {
   width: min(1440px, 100%);
@@ -57,16 +54,8 @@ button.danger {
   margin-bottom: 18px;
 }
 
-.topbar h1 {
-  margin: 0;
-  font-size: clamp(28px, 4vw, 44px);
-  line-height: 1;
-}
-
-.topbar p {
-  margin: 8px 0 0;
-  color: #5c6975;
-}
+.topbar h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); line-height: 1; }
+.topbar p  { margin: 8px 0 0; color: #5c6975; }
 
 .modeBadge {
   min-width: 96px;
@@ -105,16 +94,14 @@ button.danger {
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
 }
 
-.panel,
-.feed {
+.panel, .feed {
   border: 1px solid #d5dce3;
   border-radius: 8px;
   background: #ffffff;
   padding: 16px;
 }
 
-.panel h2,
-.feed h2 {
+.panel h2, .feed h2 {
   margin: 0 0 12px;
   font-size: 17px;
 }
@@ -135,7 +122,7 @@ button.danger {
 .statusPanel dt { color: #5c6975; }
 .statusPanel dd { margin: 0; font-weight: 700; }
 
-/* ── Feeds ───────────────────────────────────────────────────────────────── */
+/* ── Feeds ─────────────────────────────────────────────────────────────────── */
 
 .feeds {
   display: grid;
@@ -144,11 +131,7 @@ button.danger {
   margin-bottom: 14px;
 }
 
-.feedHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+.feedHeader { display: flex; align-items: center; justify-content: space-between; }
 
 .videoFrame {
   display: grid;
@@ -163,34 +146,35 @@ button.danger {
   padding: 12px;
 }
 
-.videoFrame img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
+.videoFrame img { width: 100%; height: 100%; object-fit: contain; }
 
-/* ── Robot Toggle Panel ──────────────────────────────────────────────────── */
+/* ── Hardware Row (Robots + Audio side by side) ────────────────────────────── */
 
-.robotPanel {
+.hardwareRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
   margin-bottom: 14px;
 }
+
+/* ── Robot Toggles ─────────────────────────────────────────────────────────── */
 
 .robotTogglesRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
+  gap: 12px;
   align-items: center;
 }
 
 .robotToggle {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 10px 14px;
   border: 1px solid #d5dce3;
   border-radius: 10px;
   background: #f9fafb;
-  min-width: 180px;
+  flex: 1 1 140px;
   transition: border-color 0.2s, background 0.2s;
 }
 
@@ -199,14 +183,10 @@ button.danger {
   background: #f0faf8;
 }
 
-.robotLabel {
-  font-weight: 600;
-  font-size: 15px;
-  color: #17212b;
-  flex: 1;
-}
+.robotLabel { font-weight: 600; font-size: 15px; flex: 1; }
 
-/* Toggle switch */
+/* ── Toggle Switch (shared) ─────────────────────────────────────────────────── */
+
 .toggleSwitch {
   position: relative;
   display: inline-block;
@@ -214,17 +194,9 @@ button.danger {
   user-select: none;
 }
 
-.toggleSwitch.toggleDisabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.toggleSwitch.toggleDisabled { opacity: 0.5; cursor: not-allowed; }
 
-.toggleSwitch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-  position: absolute;
-}
+.toggleSwitch input { opacity: 0; width: 0; height: 0; position: absolute; }
 
 .toggleTrack {
   display: block;
@@ -236,50 +208,53 @@ button.danger {
   position: relative;
 }
 
-.toggleSwitch input:checked + .toggleTrack {
-  background: #0f766e;
-}
+.toggleSwitch input:checked + .toggleTrack { background: #0f766e; }
 
 .toggleThumb {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   transition: transform 0.25s;
 }
 
-.toggleSwitch input:checked + .toggleTrack .toggleThumb {
-  transform: translateX(20px);
-}
+.toggleSwitch input:checked + .toggleTrack .toggleThumb { transform: translateX(20px); }
 
-.robotStatus {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  min-width: 28px;
-  text-align: right;
-}
-
+.robotStatus { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; min-width: 28px; text-align: right; }
 .robotStatus.on  { color: #0f766e; }
 .robotStatus.off { color: #9ca3af; }
 
-.robotHint {
-  margin: 12px 0 0;
-  font-size: 13px;
-  color: #5c6975;
-}
+.robotHint { margin: 12px 0 0; font-size: 13px; color: #5c6975; }
 
-/* ── Servo Angles (grouped by robot) ────────────────────────────────────── */
+/* ── Audio Panel ────────────────────────────────────────────────────────────── */
 
-.servoList {
-  display: grid;
+.audioToggleRow { display: flex; flex-direction: column; gap: 10px; }
+
+.audioCard {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #d5dce3;
+  border-radius: 10px;
+  background: #f9fafb;
+  transition: border-color 0.2s, background 0.2s;
 }
+
+.audioCard.audioCardOn {
+  border-color: #0f766e;
+  background: #f0faf8;
+}
+
+.audioCardInfo { flex: 1; }
+.audioCardTitle { display: block; font-weight: 600; font-size: 14px; }
+.audioCardSub   { display: block; font-size: 12px; color: #5c6975; margin-top: 2px; }
+
+/* ── Servo Angles ───────────────────────────────────────────────────────────── */
+
+.servoList { display: grid; gap: 12px; }
 
 .robotServoGroup {
   border: 1px solid #e5eaf0;
@@ -289,16 +264,9 @@ button.danger {
   transition: opacity 0.2s;
 }
 
-.robotServoGroup.robotDisabled {
-  opacity: 0.45;
-}
+.robotServoGroup.robotDisabled { opacity: 0.45; }
 
-.robotServoHeader {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
+.robotServoHeader { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 
 .robotGroupLabel {
   font-size: 13px;
@@ -309,14 +277,9 @@ button.danger {
 }
 
 .disabledChip {
-  font-size: 11px;
-  font-weight: 600;
-  color: #9ca3af;
-  background: #f1f2f4;
-  border-radius: 999px;
-  padding: 2px 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 11px; font-weight: 600; color: #9ca3af;
+  background: #f1f2f4; border-radius: 999px; padding: 2px 8px;
+  text-transform: uppercase; letter-spacing: 0.05em;
 }
 
 .servoRow {
@@ -328,24 +291,93 @@ button.danger {
   font-size: 13px;
 }
 
-.servoRow span {
-  color: #344054;
-  text-transform: capitalize;
-}
-
+.servoRow span  { color: #344054; text-transform: capitalize; }
 .servoRow meter { width: 100%; }
+.servoRow strong { text-align: right; font-size: 12px; }
 
-.servoRow strong {
-  text-align: right;
-  font-size: 12px;
+/* ── VINU Voice Chat ────────────────────────────────────────────────────────── */
+
+.voiceChatBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #f5f7ff;
+  border: 1px solid #dce3f8;
+  border-radius: 8px;
 }
 
-/* ── VINU ────────────────────────────────────────────────────────────────── */
+/* Mic / record button */
+.voiceBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 18px;
+  min-height: 38px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 14px;
+  background: #3655b3;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.voiceBtn:hover:not(:disabled) { background: #2d49a0; }
+
+.voiceBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Pulsing red while recording */
+.voiceBtnRecording {
+  background: #b42318 !important;
+  animation: pulse-record 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-record {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(180, 35, 24, 0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(180, 35, 24, 0); }
+}
+
+/* Voice state badge */
+.voiceBadge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+}
+
+.voiceIdle      { background: #e5eaf0; color: #5c6975; }
+.voiceRecording { background: #fee2e2; color: #b42318; animation: blink-text 1s step-start infinite; }
+.voiceBusy      { background: #fef3c7; color: #92400e; }
+.voiceSpeaking  { background: #d1fae5; color: #065f46; }
+
+@keyframes blink-text {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.voiceTranscript {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #344054;
+  background: #f0faf8;
+  border-left: 3px solid #0f766e;
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* ── VINU Text Panel ────────────────────────────────────────────────────────── */
 
 .vinuPanel textarea {
   display: block;
   width: 100%;
-  min-height: 110px;
+  min-height: 90px;
   resize: vertical;
   border: 1px solid #c9d2dc;
   border-radius: 6px;
@@ -370,36 +402,20 @@ button.danger {
   white-space: pre-wrap;
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────────── */
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
 
 @media (max-width: 960px) {
   .controlGrid,
   .feeds,
-  .bottomGrid {
+  .bottomGrid,
+  .hardwareRow {
     grid-template-columns: 1fr;
-  }
-
-  .robotTogglesRow {
-    gap: 12px;
-  }
-
-  .robotToggle {
-    min-width: 0;
-    flex: 1 1 140px;
   }
 }
 
 @media (max-width: 640px) {
-  .shell {
-    padding: 16px;
-  }
-
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .buttonRow button {
-    flex: 1 1 120px;
-  }
+  .shell    { padding: 16px; }
+  .topbar   { align-items: flex-start; flex-direction: column; }
+  .buttonRow button { flex: 1 1 120px; }
+  .voiceChatBar { flex-wrap: wrap; }
 }

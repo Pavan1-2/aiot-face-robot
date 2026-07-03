@@ -40,7 +40,15 @@ from vinu_engine import (
     get_vinu_status,
     clear_history,
 )
-from audio_handler import is_audio_available, start_audio, stop_audio
+from audio_handler import (
+    is_audio_available,
+    is_audio_active,
+    get_audio_status,
+    list_audio_devices,
+    start_audio,
+    stop_audio,
+)
+from vinu_voice import handle_voice_session, get_voice_state
 
 app = FastAPI(title="AIoT Face Robot API")
 
@@ -79,8 +87,10 @@ async def get_status():
         "vinu_status": get_vinu_status(),
         "vinu_configured": bool(GROQ_API_KEY),
         "audio_available": is_audio_available(),
+        "audio_active": is_audio_active(),
         "face_tracking_available": is_face_tracking_available(),
         "face_tracking_backend": get_face_tracking_backend(),
+        "voice_state": get_voice_state(),
         # backward-compatible single-robot servo view
         "servos": get_current_state(),
         # multi-robot data
@@ -154,7 +164,6 @@ async def do_blink():
 
 @app.get("/api/robots")
 async def get_robots():
-    """Return enabled/disabled state for all 3 robots."""
     return get_robot_enabled_state()
 
 
@@ -172,6 +181,42 @@ async def disable_robot(robot_id: int):
         return {"error": f"Invalid robot_id {robot_id}. Must be 1, 2, or 3."}, 400
     set_robot_enabled(robot_id, False)
     return {"robot": robot_id, "enabled": False}
+
+
+# ─── AUDIO PASSTHROUGH ────────────────────────────────────────────────────────
+
+@app.post("/api/audio/passthrough/on")
+async def audio_on():
+    """Enable real-time USB mic → MAX9744 speaker passthrough."""
+    start_audio()
+    return get_audio_status()
+
+
+@app.post("/api/audio/passthrough/off")
+async def audio_off():
+    """Disable audio passthrough."""
+    stop_audio()
+    return get_audio_status()
+
+
+@app.get("/api/audio/status")
+async def audio_status():
+    return get_audio_status()
+
+
+@app.get("/api/audio/devices")
+async def audio_devices():
+    """List all PyAudio devices (useful for finding USB mic / MAX9744 indices)."""
+    devices = list_audio_devices()
+    return [
+        {
+            "index": d["index"],
+            "name": d["name"],
+            "max_input_channels": d["maxInputChannels"],
+            "max_output_channels": d["maxOutputChannels"],
+        }
+        for d in devices
+    ]
 
 
 # ─── VINU ─────────────────────────────────────────────────────────────────────
@@ -229,7 +274,7 @@ async def vinu_feed(websocket: WebSocket):
             frame = get_vinu_camera_frame()
             if frame:
                 await websocket.send_text(frame)
-            await asyncio.sleep(1 / 15)  # 15 fps enough for object detection
+            await asyncio.sleep(1 / 15)
     except WebSocketDisconnect:
         print("VINU feed disconnected")
 
@@ -247,3 +292,19 @@ async def servo_status(websocket: WebSocket):
             await asyncio.sleep(0.2)
     except WebSocketDisconnect:
         pass
+
+
+@app.websocket("/ws/voice-chat")
+async def voice_chat(websocket: WebSocket):
+    """
+    Voice chat WebSocket for VINU.
+    Browser streams mic audio (WebM/Opus) → Whisper STT → VINU LLM → gTTS speaker reply.
+    """
+    await websocket.accept()
+    print("Voice chat WebSocket connected")
+    try:
+        await handle_voice_session(websocket)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        print("Voice chat WebSocket disconnected")

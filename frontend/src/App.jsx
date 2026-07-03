@@ -1,36 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-const WS_BASE = API_BASE.replace(/^http/, 'ws')
+const WS_BASE  = API_BASE.replace(/^http/, 'ws')
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function useImageSocket(path) {
   const [image, setImage] = useState('')
-
   useEffect(() => {
     const socket = new WebSocket(`${WS_BASE}${path}`)
-    socket.onmessage = (event) => {
-      setImage(`data:image/jpeg;base64,${event.data}`)
-    }
-    socket.onerror = () => {
-      socket.close()
-    }
+    socket.onmessage = (e) => setImage(`data:image/jpeg;base64,${e.data}`)
+    socket.onerror   = ()  => socket.close()
     return () => socket.close()
   }, [path])
-
   return image
 }
 
-// ─── Components ───────────────────────────────────────────────────────────────
+// ─── Small Components ─────────────────────────────────────────────────────────
 
 function Feed({ title, image, emptyText }) {
   return (
     <section className="feed">
-      <div className="feedHeader">
-        <h2>{title}</h2>
-      </div>
+      <div className="feedHeader"><h2>{title}</h2></div>
       <div className="videoFrame">
         {image ? <img src={image} alt={title} /> : <span>{emptyText}</span>}
       </div>
@@ -38,12 +30,11 @@ function Feed({ title, image, emptyText }) {
   )
 }
 
-/** Toggle switch for enabling/disabling a single robot */
 function RobotToggle({ robotId, enabled, busy, onToggle }) {
   return (
     <div className="robotToggle">
       <span className="robotLabel">Robot {robotId}</span>
-      <label className={`toggleSwitch ${busy ? 'toggleDisabled' : ''}`} title={`Toggle Robot ${robotId}`}>
+      <label className={`toggleSwitch ${busy ? 'toggleDisabled' : ''}`}>
         <input
           id={`robot-toggle-${robotId}`}
           type="checkbox"
@@ -51,9 +42,7 @@ function RobotToggle({ robotId, enabled, busy, onToggle }) {
           disabled={busy}
           onChange={() => onToggle(robotId, !enabled)}
         />
-        <span className="toggleTrack">
-          <span className="toggleThumb" />
-        </span>
+        <span className="toggleTrack"><span className="toggleThumb" /></span>
       </label>
       <span className={`robotStatus ${enabled ? 'on' : 'off'}`}>
         {enabled ? 'ON' : 'OFF'}
@@ -62,7 +51,6 @@ function RobotToggle({ robotId, enabled, busy, onToggle }) {
   )
 }
 
-/** Grouped servo angle display for one robot */
 function RobotServoGroup({ robotId, servos, enabled }) {
   return (
     <div className={`robotServoGroup ${enabled ? '' : 'robotDisabled'}`}>
@@ -81,21 +69,57 @@ function RobotServoGroup({ robotId, servos, enabled }) {
   )
 }
 
+// ─── Voice State Badge ────────────────────────────────────────────────────────
+
+const VOICE_LABELS = {
+  idle:          'Idle',
+  recording:     '● Recording…',
+  transcribing:  '⟳ Transcribing…',
+  thinking:      '⟳ Thinking…',
+  speaking:      '▶ Speaking…',
+}
+const VOICE_COLORS = {
+  idle:         'voiceIdle',
+  recording:    'voiceRecording',
+  transcribing: 'voiceBusy',
+  thinking:     'voiceBusy',
+  speaking:     'voiceSpeaking',
+}
+
+function VoiceBadge({ state }) {
+  return (
+    <span className={`voiceBadge ${VOICE_COLORS[state] || 'voiceIdle'}`}>
+      {VOICE_LABELS[state] || state}
+    </span>
+  )
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [status, setStatus] = useState(null)
-  const [question, setQuestion] = useState('')
+  const [status,    setStatus]    = useState(null)
+  const [question,  setQuestion]  = useState('')
   const [useCamera, setUseCamera] = useState(false)
-  const [reply, setReply] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const [reply,     setReply]     = useState('')
+  const [busy,      setBusy]      = useState(false)
+  const [error,     setError]     = useState('')
+
+  // Audio passthrough
+  const [audioActive, setAudioActive] = useState(false)
+  const [audioBusy,   setAudioBusy]   = useState(false)
+
+  // Voice chat
+  const [voiceState,      setVoiceState]      = useState('idle')
+  const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [voiceReply,      setVoiceReply]      = useState('')
+  const voiceWsRef   = useRef(null)
+  const mediaRecRef  = useRef(null)
+  const isRecording  = voiceState === 'recording'
 
   const classroomImage = useImageSocket('/ws/classroom-feed')
   const facultyImage   = useImageSocket('/ws/faculty-feed')
   const vinuImage      = useImageSocket('/ws/vinu-feed')
 
-  // Robots: {1: true, 2: true, 3: true} — parse keys as numbers
   const robotsEnabled = useMemo(() => {
     if (!status?.robots) return { 1: true, 2: true, 3: true }
     return Object.fromEntries(
@@ -116,6 +140,8 @@ export default function App() {
     try {
       const { data } = await axios.get(`${API_BASE}/api/status`)
       setStatus(data)
+      setAudioActive(data.audio_active ?? false)
+      setVoiceState(data.voice_state ?? 'idle')
       setError('')
     } catch {
       setError('Backend is not reachable')
@@ -136,14 +162,26 @@ export default function App() {
 
   async function toggleRobot(robotId, enable) {
     setBusy(true)
-    const action = enable ? 'enable' : 'disable'
     try {
-      await axios.post(`${API_BASE}/api/robots/${robotId}/${action}`)
+      await axios.post(`${API_BASE}/api/robots/${robotId}/${enable ? 'enable' : 'disable'}`)
       await refreshStatus()
     } catch {
-      setError(`Failed to ${action} Robot ${robotId}`)
+      setError(`Failed to ${enable ? 'enable' : 'disable'} Robot ${robotId}`)
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function toggleAudio() {
+    setAudioBusy(true)
+    try {
+      const path = audioActive ? '/api/audio/passthrough/off' : '/api/audio/passthrough/on'
+      const { data } = await axios.post(`${API_BASE}${path}`)
+      setAudioActive(data.active)
+    } catch {
+      setError('Failed to toggle audio passthrough')
+    } finally {
+      setAudioBusy(false)
     }
   }
 
@@ -165,6 +203,93 @@ export default function App() {
       setBusy(false)
     }
   }
+
+  // ── Voice Chat ───────────────────────────────────────────────────────────
+
+  const openVoiceSocket = useCallback(() => {
+    if (voiceWsRef.current) return voiceWsRef.current
+    const ws = new WebSocket(`${WS_BASE}/ws/voice-chat`)
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.state)      setVoiceState(msg.state)
+        if (msg.transcript) setVoiceTranscript(msg.transcript)
+        if (msg.reply) {
+          setVoiceReply(msg.reply)
+          setReply(msg.reply)   // also show in main VINU reply area
+        }
+        if (msg.transcript)  setQuestion(msg.transcript)
+      } catch {}
+    }
+    ws.onerror = () => { setError('Voice chat connection error'); ws.close() }
+    ws.onclose = () => { voiceWsRef.current = null; setVoiceState('idle') }
+    voiceWsRef.current = ws
+    return ws
+  }, [])
+
+  async function startVoiceRecording() {
+    setVoiceTranscript('')
+    setVoiceReply('')
+
+    const ws = openVoiceSocket()
+    // Wait for socket to open
+    await new Promise((resolve) => {
+      if (ws.readyState === WebSocket.OPEN) return resolve()
+      ws.addEventListener('open', resolve, { once: true })
+    })
+
+    // Request mic permission and start MediaRecorder
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    } catch {
+      setError('Microphone permission denied')
+      return
+    }
+
+    const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
+    mediaRecRef.current = recorder
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+        ws.send(e.data)
+      }
+    }
+
+    recorder.start(250) // send chunks every 250 ms
+    ws.send('START')
+    setVoiceState('recording')
+  }
+
+  async function stopVoiceRecording() {
+    const recorder = mediaRecRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop()
+      recorder.stream.getTracks().forEach((t) => t.stop())
+      mediaRecRef.current = null
+    }
+    const ws = voiceWsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send('STOP')
+    }
+    setVoiceState('transcribing')
+  }
+
+  function handleVoiceButton() {
+    if (isRecording) {
+      stopVoiceRecording()
+    } else {
+      startVoiceRecording()
+    }
+  }
+
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      voiceWsRef.current?.close()
+      mediaRecRef.current?.stop()
+    }
+  }, [])
 
   useEffect(() => {
     refreshStatus()
@@ -216,31 +341,62 @@ export default function App() {
             <dt>VINU</dt>
             <dd>{status?.vinu_configured ? status.vinu_status : 'needs API key'}</dd>
             <dt>Audio</dt>
-            <dd>{status?.audio_available ? 'available' : 'disabled'}</dd>
+            <dd>{status?.audio_available ? (status.audio_active ? 'passthrough on' : 'available') : 'disabled'}</dd>
             <dt>Face mesh</dt>
             <dd>{status?.face_tracking_available ? status.face_tracking_backend : 'feed only'}</dd>
           </dl>
         </div>
       </section>
 
-      {/* ── Row 2: Robot Toggles ── */}
-      <section className="panel robotPanel">
-        <h2>Robots</h2>
-        <div className="robotTogglesRow">
-          {[1, 2, 3].map((id) => (
-            <RobotToggle
-              key={id}
-              robotId={id}
-              enabled={robotsEnabled[id] ?? true}
-              busy={busy}
-              onToggle={toggleRobot}
-            />
-          ))}
+      {/* ── Row 2: Robots + Audio ── */}
+      <section className="hardwareRow">
+        {/* Robot Toggles */}
+        <div className="panel robotPanel">
+          <h2>Robots</h2>
+          <div className="robotTogglesRow">
+            {[1, 2, 3].map((id) => (
+              <RobotToggle
+                key={id}
+                robotId={id}
+                enabled={robotsEnabled[id] ?? true}
+                busy={busy}
+                onToggle={toggleRobot}
+              />
+            ))}
+          </div>
+          <p className="robotHint">All enabled robots mirror the same movements.</p>
         </div>
-        <p className="robotHint">
-          All enabled robots mirror the same movements.
-          Disabled robots hold their current position.
-        </p>
+
+        {/* Audio Passthrough */}
+        <div className="panel audioPanel">
+          <h2>Audio Passthrough</h2>
+          <div className="audioToggleRow">
+            <div className={`audioCard ${audioActive ? 'audioCardOn' : ''}`}>
+              <div className="audioCardInfo">
+                <span className="audioCardTitle">USB Mic → Speaker</span>
+                <span className="audioCardSub">
+                  {status?.audio_available
+                    ? (audioActive ? 'Passthrough active' : 'Ready')
+                    : 'PyAudio not installed'}
+                </span>
+              </div>
+              <label className={`toggleSwitch ${audioBusy || !status?.audio_available ? 'toggleDisabled' : ''}`}>
+                <input
+                  id="audio-passthrough-toggle"
+                  type="checkbox"
+                  checked={audioActive}
+                  disabled={audioBusy || !status?.audio_available}
+                  onChange={toggleAudio}
+                />
+                <span className="toggleTrack"><span className="toggleThumb" /></span>
+              </label>
+              <span className={`robotStatus ${audioActive ? 'on' : 'off'}`}>
+                {audioActive ? 'ON' : 'OFF'}
+              </span>
+            </div>
+          </div>
+          <p className="robotHint">Real-time mic → MAX9744 amp → speaker passthrough.</p>
+        </div>
       </section>
 
       {/* ── Row 3: Video Feeds ── */}
@@ -254,16 +410,39 @@ export default function App() {
       <section className="bottomGrid">
         <form className="panel vinuPanel" onSubmit={askVinu}>
           <h2>VINU Query</h2>
+
+          {/* ─ Voice Chat ─ */}
+          <div className="voiceChatBar">
+            <button
+              id="btn-voice-chat"
+              type="button"
+              className={`voiceBtn ${isRecording ? 'voiceBtnRecording' : ''}`}
+              disabled={voiceState !== 'idle' && voiceState !== 'recording'}
+              onClick={handleVoiceButton}
+              title={isRecording ? 'Stop recording and send' : 'Start voice chat'}
+            >
+              {isRecording ? '⏹ Stop & Send' : '🎤 Voice Chat'}
+            </button>
+            <VoiceBadge state={voiceState} />
+          </div>
+
+          {voiceTranscript && (
+            <p className="voiceTranscript">
+              <strong>You said:</strong> {voiceTranscript}
+            </p>
+          )}
+
+          {/* ─ Text input ─ */}
           <textarea
             value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ask VINU a teaching or object-identification question"
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Ask VINU a question, or use voice chat above"
           />
           <label className="checkbox">
             <input
               type="checkbox"
               checked={useCamera}
-              onChange={(event) => setUseCamera(event.target.checked)}
+              onChange={(e) => setUseCamera(e.target.checked)}
             />
             Use VINU camera frame
           </label>
