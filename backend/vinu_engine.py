@@ -10,7 +10,9 @@ import cv2
 from gtts import gTTS
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MODEL = os.getenv("VINU_MODEL", "llama-3.2-11b-vision-preview")
+# llama-3.2-11b-vision-preview was decommissioned by Groq.
+# Replacement: meta-llama/llama-4-scout-17b-16e-instruct (128K ctx, vision capable)
+MODEL = os.getenv("VINU_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 CAMERA_INDEX = int(os.getenv("FACULTY_CAMERA_INDEX", "0"))
 ENABLE_TTS = os.getenv("VINU_ENABLE_TTS", "1").lower() not in {"0", "false", "no"}
 
