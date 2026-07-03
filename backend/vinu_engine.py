@@ -9,7 +9,7 @@ import subprocess
 import os
 
 # IMPORTANT: Add your Groq API key here
-GROQ_API_KEY = "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"
+GROQ_API_KEY = ""
 MODEL = "llama-3.2-11b-vision-preview"
 
 SYSTEM_PROMPT = """You are VINU (Virtual Instructional Network Unit), 
