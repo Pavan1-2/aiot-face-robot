@@ -117,18 +117,17 @@ button.danger {
 .smoothnessRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid #e5eaf0;
 }
 
-.smoothnessLabel {
-  font-size: 13px;
+.smoothnessEndLabel {
+  font-size: 12px;
   font-weight: 600;
-  color: #344054;
+  color: #5c6975;
   white-space: nowrap;
-  min-width: 80px;
 }
 
 .smoothnessSlider {
@@ -137,7 +136,7 @@ button.danger {
   -webkit-appearance: none;
   appearance: none;
   border-radius: 3px;
-  background: linear-gradient(to right, #0f766e, #c8d0da);
+  background: linear-gradient(to right, #0f766e, #3655b3);
   outline: none;
   cursor: pointer;
   transition: opacity 0.2s;
@@ -147,31 +146,34 @@ button.danger {
 
 .smoothnessSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 18px; height: 18px;
+  width: 20px; height: 20px;
   border-radius: 50%;
-  background: #0f766e;
-  border: 2px solid #ffffff;
+  background: #ffffff;
+  border: 3px solid #0f766e;
   box-shadow: 0 1px 4px rgba(0,0,0,0.25);
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: transform 0.15s, border-color 0.15s;
 }
 
-.smoothnessSlider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.smoothnessSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  border-color: #3655b3;
+}
 
 .smoothnessSlider::-moz-range-thumb {
-  width: 18px; height: 18px;
+  width: 20px; height: 20px;
   border-radius: 50%;
-  background: #0f766e;
-  border: 2px solid #ffffff;
+  background: #ffffff;
+  border: 3px solid #0f766e;
   cursor: pointer;
 }
 
 .smoothnessValue {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  color: #0f766e;
+  color: #344054;
   white-space: nowrap;
-  min-width: 88px;
+  min-width: 72px;
   text-align: right;
 }
 

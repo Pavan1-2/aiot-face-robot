@@ -35,39 +35,60 @@ latest_faculty_frame = None
 frame_lock  = threading.Lock()
 camera_lock = threading.Lock()
 
-# ── Smoothing parameters (runtime-adjustable) ─────────────────────────────────
-#
-# alpha  — EMA blend factor: 0.0 = frozen (max smoothness), 1.0 = raw (no smoothing).
-#          Good range: 0.05 (very smooth/slow) → 0.35 (responsive).
-#          Default: 0.10 — noticeably smoother than before.
-#
-# MAX_DELTA — max degrees a servo can jump per frame.
-#             Smaller = smoother, larger = more responsive.
-#             Default: 6 deg/frame (≈ 180°/s at 30 fps).
-#
-# DEAD_ZONE — ignore raw changes smaller than this many degrees.
-#             Kills micro-jitter from sensor noise without delaying real movement.
-
-_smooth_lock = threading.Lock()
-_alpha     = 0.10    # default smoothness
-_max_delta = 6.0     # degrees per frame cap
-_dead_zone = 1.5     # degrees — ignore noise below this
-
-smooth_state = {"yaw": 90.0, "pitch": 90.0, "eye": 90.0}
 CAMERA_INDEX = int(os.getenv("FACULTY_CAMERA_INDEX", "0"))
 
-# ── Servo output range ─────────────────────────────────────────────────────────
+# ── Spring-Damper Smoothing ───────────────────────────────────────────────────
 #
-# These are the ACTUAL angles sent to the servo, not the hardware limits.
-# Widened from the old narrow range to produce full, visible movements.
+# Instead of EMA (which breaks at low alpha due to int() rounding in write_servo),
+# we use a spring-damper system:
 #
-# Yaw (left/right):  30° … 150° — full 120° sweep
-# Pitch (up/down):   40° … 140° — full 100° sweep
-# Eye horizontal:    50° … 130° — 80° sweep
+#   velocity += STIFFNESS * (target - position)   ← spring pulls toward target
+#   velocity *= DAMPING                            ← damper slows it down
+#   position += velocity                           ← integrate
+#
+# Slider controls STIFFNESS:
+#   Low  (0.05) → moves slowly and very smoothly  (overdamped)
+#   High (0.90) → snaps to target instantly        (underdamped / responsive)
+#
+# DAMPING is fixed at 0.65 — prevents oscillation while still being fast.
+# MAX_SPEED caps velocity so the servo never lurches more than N°/frame.
+#
+# Because we accumulate floating-point position and only write when the
+# integer degree changes, sub-degree EMA movements are never lost.
 
-NECK_LEFT  = 30;  NECK_RIGHT = 150   # yaw full range
-NECK_UP    = 40;  NECK_DOWN  = 140   # pitch full range
-EYE_LEFT   = 50;  EYE_RIGHT  = 130   # eye horizontal range
+_smooth_lock = threading.Lock()
+_stiffness  = 0.30    # slider controls this: 0.05 (smooth) → 0.90 (snappy)
+_damping    = 0.65    # fixed — prevents oscillation
+_max_speed  = 12.0    # max degrees per frame (hard cap to stop lurching)
+
+# Per-axis state: float positions + velocities
+_pos = {"yaw": 90.0, "pitch": 90.0, "eye": 90.0}
+_vel = {"yaw": 0.0,  "pitch": 0.0,  "eye": 0.0}
+
+# Track last written integer angle to avoid redundant hardware writes
+_last_written = {"neck_yaw": -1, "neck_pitch": -1, "right_eye": -1, "left_eye": -1}
+
+# ── Servo Output Range ────────────────────────────────────────────────────────
+#
+# Maximum physical travel of each servo.
+# These are WIDER than before to guarantee full visible movement.
+#
+# Yaw  (left/right) : 20° … 160°  = 140° total sweep
+# Pitch (up/down)   : 30° … 150°  = 120° total sweep
+# Eyes (horizontal) : 45° … 135°  =  90° total sweep
+
+NECK_LEFT  = 20;  NECK_RIGHT = 160   # yaw:   widest possible
+NECK_UP    = 30;  NECK_DOWN  = 150   # pitch: widest possible
+EYE_LEFT   = 45;  EYE_RIGHT  = 135   # eyes
+
+# ── Face Ratio Input Band ─────────────────────────────────────────────────────
+#
+# Narrow band = small head movement → large servo sweep.
+# Wider band  = you have to turn your head a lot to get full servo range.
+#
+# Tighter than before to amplify small movements:
+YAW_IN_MIN   = 0.28;  YAW_IN_MAX   = 0.72   # was 0.20–0.80
+PITCH_IN_MIN = 0.38;  PITCH_IN_MAX = 0.62   # was 0.35–0.65
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -82,52 +103,66 @@ def map_range(val, in_min, in_max, out_min, out_max):
         max(out_min, out_max)
     )
 
-def _smooth_step(raw: float, current: float) -> float:
+def _spring_step(axis: str, target: float) -> float:
     """
-    Apply dead-zone → velocity cap → EMA blend.
+    Advance one frame of spring-damper physics for the given axis.
+    Returns new float position.
     Thread-safe read of smoothing params.
     """
     with _smooth_lock:
-        alpha     = _alpha
-        max_delta = _max_delta
-        dead_zone = _dead_zone
+        k    = _stiffness
+        d    = _damping
+        vmax = _max_speed
 
-    diff = raw - current
-    # Dead-zone: ignore tiny sensor noise
-    if abs(diff) < dead_zone:
-        return current
-    # Velocity cap: limit max degrees per frame
-    capped = current + clamp(diff, -max_delta, max_delta)
-    # EMA blend
-    return alpha * capped + (1.0 - alpha) * current
+    # Spring force pulls position toward target
+    error = target - _pos[axis]
+    _vel[axis] += k * error
+    # Damping
+    _vel[axis] *= d
+    # Hard speed cap
+    _vel[axis] = clamp(_vel[axis], -vmax, vmax)
+    # Integrate
+    _pos[axis] += _vel[axis]
+    return _pos[axis]
 
-# ── Public smoothing API ───────────────────────────────────────────────────────
-
-def set_smoothness(alpha: float):
+def _write_if_changed(servo_name: str, float_angle: float):
     """
-    Set EMA blend factor.
-    alpha=0.05 → very smooth (laggy), alpha=0.35 → responsive (slight jitter).
+    Write to hardware only when the integer angle actually changes.
+    This avoids the issue where sub-degree EMA changes are lost to int().
     """
-    global _alpha
+    new_int = int(round(float_angle))
+    if new_int != _last_written.get(servo_name, -1):
+        _last_written[servo_name] = new_int
+        write_servo(servo_name, float_angle)
+
+# ── Public Smoothing API ───────────────────────────────────────────────────────
+
+def set_smoothness(value: float):
+    """
+    Set stiffness from slider.
+    value = 0.0 (max smooth) → 1.0 (max responsive) — maps to stiffness 0.05–0.90.
+    Can also be called directly with a raw stiffness value.
+    """
+    global _stiffness
+    # Accept either normalised 0-1 or raw stiffness (both < 1.0 so same)
+    stiffness = clamp(float(value), 0.03, 0.95)
     with _smooth_lock:
-        _alpha = clamp(float(alpha), 0.01, 1.0)
-    print(f"Tracking smoothness alpha={_alpha:.3f}")
+        _stiffness = stiffness
+    print(f"Tracking stiffness={_stiffness:.3f}")
 
 def get_smoothness() -> float:
     with _smooth_lock:
-        return _alpha
-
-def set_max_delta(deg: float):
-    global _max_delta
-    with _smooth_lock:
-        _max_delta = clamp(float(deg), 1.0, 45.0)
+        return _stiffness
 
 def get_tracking_params() -> dict:
     with _smooth_lock:
         return {
-            "alpha":     _alpha,
-            "max_delta": _max_delta,
-            "dead_zone": _dead_zone,
+            "alpha":     _stiffness,   # named 'alpha' for API compat
+            "stiffness": _stiffness,
+            "damping":   _damping,
+            "max_speed": _max_speed,
+            "yaw_range":   [NECK_LEFT, NECK_RIGHT],
+            "pitch_range": [NECK_UP,   NECK_DOWN],
         }
 
 # ── Tracking Loop ─────────────────────────────────────────────────────────────
@@ -169,10 +204,9 @@ def tracking_loop():
             # ── Yaw ratio (left/right) ──────────────────────────────────────
             eye_width = right_eye.x - left_eye.x
             if eye_width > 1e-4:
-                # Narrowed input range → amplifies small head turns
                 yaw_ratio = map_range(
                     (nose.x - left_eye.x) / eye_width,
-                    0.20, 0.80, 0.0, 1.0   # was 0.15–0.85 (less sensitive)
+                    YAW_IN_MIN, YAW_IN_MAX, 0.0, 1.0
                 )
             else:
                 yaw_ratio = 0.5
@@ -180,29 +214,28 @@ def tracking_loop():
             # ── Pitch ratio (up/down) ───────────────────────────────────────
             face_height = chin.y - forehead.y
             if face_height > 1e-4:
-                # Narrowed input range → amplifies tilt movements
                 pitch_ratio = map_range(
                     (nose.y - forehead.y) / face_height,
-                    0.35, 0.65, 0.0, 1.0   # was 0.30–0.70 (less sensitive)
+                    PITCH_IN_MIN, PITCH_IN_MAX, 0.0, 1.0
                 )
             else:
                 pitch_ratio = 0.5
 
             # ── Raw servo targets ───────────────────────────────────────────
-            raw_yaw   = NECK_LEFT  + (NECK_RIGHT - NECK_LEFT)  * yaw_ratio
-            raw_pitch = NECK_UP    + (NECK_DOWN  - NECK_UP)    * pitch_ratio
-            raw_eye   = EYE_LEFT   + (EYE_RIGHT  - EYE_LEFT)   * yaw_ratio
+            tgt_yaw   = NECK_LEFT  + (NECK_RIGHT - NECK_LEFT)  * yaw_ratio
+            tgt_pitch = NECK_UP    + (NECK_DOWN  - NECK_UP)    * pitch_ratio
+            tgt_eye   = EYE_LEFT   + (EYE_RIGHT  - EYE_LEFT)   * yaw_ratio
 
-            # ── Smooth ─────────────────────────────────────────────────────
-            smooth_state["yaw"]   = _smooth_step(raw_yaw,   smooth_state["yaw"])
-            smooth_state["pitch"] = _smooth_step(raw_pitch, smooth_state["pitch"])
-            smooth_state["eye"]   = _smooth_step(raw_eye,   smooth_state["eye"])
+            # ── Spring-damper step ──────────────────────────────────────────
+            yaw_pos   = _spring_step("yaw",   tgt_yaw)
+            pitch_pos = _spring_step("pitch", tgt_pitch)
+            eye_pos   = _spring_step("eye",   tgt_eye)
 
-            # ── Write to servos ────────────────────────────────────────────
-            write_servo("neck_yaw",   smooth_state["yaw"])
-            write_servo("neck_pitch", smooth_state["pitch"])
-            write_servo("right_eye",  smooth_state["eye"])
-            write_servo("left_eye",   smooth_state["eye"])
+            # ── Write (only when integer angle actually changes) ─────────────
+            _write_if_changed("neck_yaw",   yaw_pos)
+            _write_if_changed("neck_pitch", pitch_pos)
+            _write_if_changed("right_eye",  eye_pos)
+            _write_if_changed("left_eye",   eye_pos)
 
             # ── Overlay ────────────────────────────────────────────────────
             h, w = frame.shape[:2]
@@ -214,11 +247,11 @@ def tracking_loop():
                 (int(right_eye.x * w) + 20, int(chin.y * h) + 20),
                 (0, 255, 100), 2
             )
-            # Show smoothness alpha on frame
             with _smooth_lock:
-                a = _alpha
-            cv2.putText(frame, f"smooth={a:.2f}", (8, 24),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 100), 2)
+                k = _stiffness
+            label = f"stiffness={k:.2f}  yaw={yaw_pos:.1f}  pitch={pitch_pos:.1f}"
+            cv2.putText(frame, label, (8, 24),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 100), 2)
 
         elif FACE_TRACKING_BACKEND == "opencv-haar":
             gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -233,18 +266,18 @@ def tracking_loop():
                 yaw_ratio   = clamp(cx / max(w, 1), 0.0, 1.0)
                 pitch_ratio = clamp(cy / max(h, 1), 0.0, 1.0)
 
-                raw_yaw   = NECK_LEFT + (NECK_RIGHT - NECK_LEFT) * yaw_ratio
-                raw_pitch = NECK_UP   + (NECK_DOWN  - NECK_UP)   * pitch_ratio
-                raw_eye   = EYE_LEFT  + (EYE_RIGHT  - EYE_LEFT)  * yaw_ratio
+                tgt_yaw   = NECK_LEFT + (NECK_RIGHT - NECK_LEFT) * yaw_ratio
+                tgt_pitch = NECK_UP   + (NECK_DOWN  - NECK_UP)   * pitch_ratio
+                tgt_eye   = EYE_LEFT  + (EYE_RIGHT  - EYE_LEFT)  * yaw_ratio
 
-                smooth_state["yaw"]   = _smooth_step(raw_yaw,   smooth_state["yaw"])
-                smooth_state["pitch"] = _smooth_step(raw_pitch, smooth_state["pitch"])
-                smooth_state["eye"]   = _smooth_step(raw_eye,   smooth_state["eye"])
+                yaw_pos   = _spring_step("yaw",   tgt_yaw)
+                pitch_pos = _spring_step("pitch", tgt_pitch)
+                eye_pos   = _spring_step("eye",   tgt_eye)
 
-                write_servo("neck_yaw",   smooth_state["yaw"])
-                write_servo("neck_pitch", smooth_state["pitch"])
-                write_servo("right_eye",  smooth_state["eye"])
-                write_servo("left_eye",   smooth_state["eye"])
+                _write_if_changed("neck_yaw",   yaw_pos)
+                _write_if_changed("neck_pitch", pitch_pos)
+                _write_if_changed("right_eye",  eye_pos)
+                _write_if_changed("left_eye",   eye_pos)
 
                 cv2.rectangle(frame, (x, y), (x + fw, y + fh), (0, 180, 255), 2)
                 cv2.circle(frame, (int(cx), int(cy)), 6, (0, 180, 255), -1)
@@ -262,12 +295,16 @@ def tracking_loop():
     recalibrate_to_center()
     print("Face tracking stopped")
 
-# ── Thread control ─────────────────────────────────────────────────────────────
+# ── Thread Control ─────────────────────────────────────────────────────────────
 
 def start_tracking():
-    global tracking_active, tracking_thread
+    global tracking_active, tracking_thread, _pos, _vel, _last_written
     if tracking_active:
         return
+    # Reset spring state so it starts from center
+    _pos.update({"yaw": 90.0, "pitch": 90.0, "eye": 90.0})
+    _vel.update({"yaw": 0.0,  "pitch": 0.0,  "eye": 0.0})
+    _last_written.update({"neck_yaw": -1, "neck_pitch": -1, "right_eye": -1, "left_eye": -1})
     tracking_active = True
     tracking_thread = threading.Thread(target=tracking_loop, daemon=True)
     tracking_thread.start()

@@ -39,12 +39,13 @@ def _channel(robot_id: int, servo_name: str) -> int:
     return ROBOT_BASE_CHANNELS[robot_id] + offset
 
 # Mechanical limits (same for all 3 robots)
+# These must be >= the output range used in face_tracking.py
 LIMITS = {
     "right_eye":  {"min": 40,  "max": 140, "center": 90},
     "left_eye":   {"min": 40,  "max": 140, "center": 90},
     "eyelid":     {"min": 0,   "max": 110, "center": 90},
-    "neck_pitch": {"min": 35,  "max": 145, "center": 90},
-    "neck_yaw":   {"min": 30,  "max": 150, "center": 90},
+    "neck_pitch": {"min": 30,  "max": 150, "center": 90},   # widened from 35/145
+    "neck_yaw":   {"min": 20,  "max": 160, "center": 90},   # widened from 30/150
 }
 
 # Per-robot enable flags (all enabled by default)

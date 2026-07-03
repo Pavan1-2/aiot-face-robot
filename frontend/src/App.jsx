@@ -363,24 +363,23 @@ export default function App() {
             <button id="btn-mode-idle"     disabled={busy} onClick={() => post('/api/mode/idle')}>Idle</button>
           </div>
           <div className="smoothnessRow">
-            <label className="smoothnessLabel" htmlFor="smoothness-slider">
-              Smoothness
-            </label>
+            <span className="smoothnessEndLabel">🐢 Smooth</span>
             <input
               id="smoothness-slider"
               type="range"
-              min="0.01"
-              max="0.50"
+              min="0.03"
+              max="0.95"
               step="0.01"
               value={smoothness}
               onChange={handleSmoothnessChange}
               disabled={smoothnessBusy}
               className="smoothnessSlider"
             />
+            <span className="smoothnessEndLabel">⚡ Snappy</span>
             <span className="smoothnessValue">
-              {smoothness <= 0.08 ? '🐢 Max Smooth' :
-               smoothness >= 0.40 ? '⚡ Responsive' :
-               `${Math.round((1 - smoothness / 0.5) * 100)}%`}
+              {smoothness <= 0.10 ? 'Max Smooth' :
+               smoothness >= 0.80 ? 'Max Snappy' :
+               `${Math.round((smoothness / 0.95) * 100)}%`}
             </span>
           </div>
         </div>
