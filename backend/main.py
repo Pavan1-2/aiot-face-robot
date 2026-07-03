@@ -13,20 +13,23 @@ from servo_controller import (
     recalibrate_to_center,
     emergency_stop,
     get_current_state,
-    blink
+    get_all_robot_states,
+    get_robot_enabled_state,
+    set_robot_enabled,
+    blink,
 )
 from face_tracking import (
     get_face_tracking_backend,
     start_tracking,
     stop_tracking,
     get_faculty_frame_base64,
-    is_face_tracking_available
+    is_face_tracking_available,
 )
 from pi_stream import (
     ensure_pi_receiver_started,
     get_pi_frame_base64,
     is_pi_connected,
-    stop_pi_receiver
+    stop_pi_receiver,
 )
 from vinu_engine import (
     GROQ_API_KEY,
@@ -35,7 +38,7 @@ from vinu_engine import (
     query_vinu,
     get_vinu_camera_frame,
     get_vinu_status,
-    clear_history
+    clear_history,
 )
 from audio_handler import is_audio_available, start_audio, stop_audio
 
@@ -45,16 +48,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 current_mode = "idle"
 mode_lock = asyncio.Lock()
 
+
 @app.on_event("startup")
 async def startup():
     ensure_pi_receiver_started()
     recalibrate_to_center()
+
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -63,7 +68,8 @@ async def shutdown():
     stop_audio()
     stop_pi_receiver()
 
-# ─── STATUS ───────────────────────────────────
+
+# ─── STATUS ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
 async def get_status():
@@ -75,10 +81,15 @@ async def get_status():
         "audio_available": is_audio_available(),
         "face_tracking_available": is_face_tracking_available(),
         "face_tracking_backend": get_face_tracking_backend(),
-        "servos": get_current_state()
+        # backward-compatible single-robot servo view
+        "servos": get_current_state(),
+        # multi-robot data
+        "robots": get_robot_enabled_state(),
+        "robot_servos": get_all_robot_states(),
     }
 
-# ─── MODE CONTROL ─────────────────────────────
+
+# ─── MODE CONTROL ─────────────────────────────────────────────────────────────
 
 @app.post("/api/mode/tracking")
 async def mode_tracking():
@@ -90,6 +101,7 @@ async def mode_tracking():
         current_mode = "tracking"
     return {"mode": "tracking", "status": "started"}
 
+
 @app.post("/api/mode/vinu")
 async def mode_vinu():
     global current_mode
@@ -99,6 +111,7 @@ async def mode_vinu():
         start_vinu()
         current_mode = "vinu"
     return {"mode": "vinu", "status": "started"}
+
 
 @app.post("/api/mode/idle")
 async def mode_idle():
@@ -111,12 +124,14 @@ async def mode_idle():
         current_mode = "idle"
     return {"mode": "idle", "status": "stopped"}
 
-# ─── SERVO CONTROLS ───────────────────────────
+
+# ─── SERVO CONTROLS ───────────────────────────────────────────────────────────
 
 @app.post("/api/servo/center")
 async def center():
     recalibrate_to_center()
     return {"status": "centered"}
+
 
 @app.post("/api/servo/estop")
 async def estop():
@@ -128,12 +143,38 @@ async def estop():
     current_mode = "idle"
     return {"status": "emergency_stopped"}
 
+
 @app.post("/api/servo/blink")
 async def do_blink():
     blink()
     return {"status": "blinked"}
 
-# ─── VINU ─────────────────────────────────────
+
+# ─── ROBOT ENABLE / DISABLE ───────────────────────────────────────────────────
+
+@app.get("/api/robots")
+async def get_robots():
+    """Return enabled/disabled state for all 3 robots."""
+    return get_robot_enabled_state()
+
+
+@app.post("/api/robots/{robot_id}/enable")
+async def enable_robot(robot_id: int):
+    if robot_id not in (1, 2, 3):
+        return {"error": f"Invalid robot_id {robot_id}. Must be 1, 2, or 3."}, 400
+    set_robot_enabled(robot_id, True)
+    return {"robot": robot_id, "enabled": True}
+
+
+@app.post("/api/robots/{robot_id}/disable")
+async def disable_robot(robot_id: int):
+    if robot_id not in (1, 2, 3):
+        return {"error": f"Invalid robot_id {robot_id}. Must be 1, 2, or 3."}, 400
+    set_robot_enabled(robot_id, False)
+    return {"robot": robot_id, "enabled": False}
+
+
+# ─── VINU ─────────────────────────────────────────────────────────────────────
 
 @app.post("/api/vinu/query")
 async def vinu_query(data: dict):
@@ -142,12 +183,14 @@ async def vinu_query(data: dict):
     response = await query_vinu(text, use_camera)
     return {"response": response}
 
+
 @app.post("/api/vinu/clear")
 async def vinu_clear():
     clear_history()
     return {"status": "cleared"}
 
-# ─── WEBSOCKETS ───────────────────────────────
+
+# ─── WEBSOCKETS ───────────────────────────────────────────────────────────────
 
 @app.websocket("/ws/classroom-feed")
 async def classroom_feed(websocket: WebSocket):
@@ -158,9 +201,10 @@ async def classroom_feed(websocket: WebSocket):
             frame = get_pi_frame_base64()
             if frame:
                 await websocket.send_text(frame)
-            await asyncio.sleep(1/25)  # 25fps
+            await asyncio.sleep(1 / 25)  # 25 fps
     except WebSocketDisconnect:
         print("Classroom feed disconnected")
+
 
 @app.websocket("/ws/faculty-feed")
 async def faculty_feed(websocket: WebSocket):
@@ -171,9 +215,10 @@ async def faculty_feed(websocket: WebSocket):
             frame = get_faculty_frame_base64()
             if frame:
                 await websocket.send_text(frame)
-            await asyncio.sleep(1/25)
+            await asyncio.sleep(1 / 25)
     except WebSocketDisconnect:
         print("Faculty feed disconnected")
+
 
 @app.websocket("/ws/vinu-feed")
 async def vinu_feed(websocket: WebSocket):
@@ -184,17 +229,21 @@ async def vinu_feed(websocket: WebSocket):
             frame = get_vinu_camera_frame()
             if frame:
                 await websocket.send_text(frame)
-            await asyncio.sleep(1/15)  # 15fps enough for object detection
+            await asyncio.sleep(1 / 15)  # 15 fps enough for object detection
     except WebSocketDisconnect:
         print("VINU feed disconnected")
+
 
 @app.websocket("/ws/servo-status")
 async def servo_status(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            state = get_current_state()
-            await websocket.send_text(json.dumps(state))
+            payload = {
+                "robots": get_robot_enabled_state(),
+                "robot_servos": get_all_robot_states(),
+            }
+            await websocket.send_text(json.dumps(payload))
             await asyncio.sleep(0.2)
     except WebSocketDisconnect:
         pass

@@ -22,6 +22,7 @@ button {
   color: #17212b;
   cursor: pointer;
   padding: 0 14px;
+  transition: border-color 0.15s, color 0.15s;
 }
 
 button:hover:not(:disabled) {
@@ -39,6 +40,8 @@ button.danger {
   border-color: #b42318;
   color: #ffffff;
 }
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
 
 .shell {
   width: min(1440px, 100%);
@@ -77,17 +80,9 @@ button.danger {
   font-weight: 700;
 }
 
-.modeBadge.tracking {
-  background: #0f766e;
-}
-
-.modeBadge.vinu {
-  background: #3655b3;
-}
-
-.modeBadge.idle {
-  background: #667085;
-}
+.modeBadge.tracking { background: #0f766e; }
+.modeBadge.vinu     { background: #3655b3; }
+.modeBadge.idle     { background: #667085; }
 
 .alert {
   margin-bottom: 16px;
@@ -137,14 +132,10 @@ button.danger {
   margin: 0;
 }
 
-.statusPanel dt {
-  color: #5c6975;
-}
+.statusPanel dt { color: #5c6975; }
+.statusPanel dd { margin: 0; font-weight: 700; }
 
-.statusPanel dd {
-  margin: 0;
-  font-weight: 700;
-}
+/* ── Feeds ───────────────────────────────────────────────────────────────── */
 
 .feeds {
   display: grid;
@@ -178,6 +169,179 @@ button.danger {
   object-fit: contain;
 }
 
+/* ── Robot Toggle Panel ──────────────────────────────────────────────────── */
+
+.robotPanel {
+  margin-bottom: 14px;
+}
+
+.robotTogglesRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: center;
+}
+
+.robotToggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid #d5dce3;
+  border-radius: 10px;
+  background: #f9fafb;
+  min-width: 180px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.robotToggle:has(input:checked) {
+  border-color: #0f766e;
+  background: #f0faf8;
+}
+
+.robotLabel {
+  font-weight: 600;
+  font-size: 15px;
+  color: #17212b;
+  flex: 1;
+}
+
+/* Toggle switch */
+.toggleSwitch {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggleSwitch.toggleDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggleSwitch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggleTrack {
+  display: block;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: #c8d0da;
+  transition: background 0.25s;
+  position: relative;
+}
+
+.toggleSwitch input:checked + .toggleTrack {
+  background: #0f766e;
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform 0.25s;
+}
+
+.toggleSwitch input:checked + .toggleTrack .toggleThumb {
+  transform: translateX(20px);
+}
+
+.robotStatus {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  min-width: 28px;
+  text-align: right;
+}
+
+.robotStatus.on  { color: #0f766e; }
+.robotStatus.off { color: #9ca3af; }
+
+.robotHint {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #5c6975;
+}
+
+/* ── Servo Angles (grouped by robot) ────────────────────────────────────── */
+
+.servoList {
+  display: grid;
+  gap: 12px;
+}
+
+.robotServoGroup {
+  border: 1px solid #e5eaf0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafbfc;
+  transition: opacity 0.2s;
+}
+
+.robotServoGroup.robotDisabled {
+  opacity: 0.45;
+}
+
+.robotServoHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.robotGroupLabel {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #344054;
+}
+
+.disabledChip {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  background: #f1f2f4;
+  border-radius: 999px;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.servoRow {
+  display: grid;
+  grid-template-columns: 110px 1fr 56px;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  font-size: 13px;
+}
+
+.servoRow span {
+  color: #344054;
+  text-transform: capitalize;
+}
+
+.servoRow meter { width: 100%; }
+
+.servoRow strong {
+  text-align: right;
+  font-size: 12px;
+}
+
+/* ── VINU ────────────────────────────────────────────────────────────────── */
+
 .vinuPanel textarea {
   display: block;
   width: 100%;
@@ -206,38 +370,22 @@ button.danger {
   white-space: pre-wrap;
 }
 
-.servoList {
-  display: grid;
-  gap: 10px;
-}
-
-.servoRow {
-  display: grid;
-  grid-template-columns: 110px 1fr 64px;
-  align-items: center;
-  gap: 10px;
-  min-height: 28px;
-}
-
-.servoRow span {
-  color: #344054;
-  text-transform: capitalize;
-}
-
-.servoRow meter {
-  width: 100%;
-}
-
-.servoRow strong {
-  text-align: right;
-  font-size: 13px;
-}
+/* ── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 960px) {
   .controlGrid,
   .feeds,
   .bottomGrid {
     grid-template-columns: 1fr;
+  }
+
+  .robotTogglesRow {
+    gap: 12px;
+  }
+
+  .robotToggle {
+    min-width: 0;
+    flex: 1 1 140px;
   }
 }
 
