@@ -1,0 +1,10 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-dotenv>=1.0
+opencv-python>=4.9,<5
+opencv-contrib-python>=4.9,<5
+mediapipe>=0.10
+numpy>=1.26
+pyzmq>=25
+groq>=0.9
+gTTS>=2.5

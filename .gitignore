@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+node_modules/
+dist/
+
+.env
+.env.local
+.env.*.local
+
+*.log
+npm-debug.log*

@@ -1,0 +1,3 @@
+-r requirements.txt
+PyAudio>=0.2.14
+adafruit-circuitpython-servokit>=1.3
